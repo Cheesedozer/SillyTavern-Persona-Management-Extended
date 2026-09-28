@@ -1,8 +1,8 @@
 import { PME } from "./core/constants.js";
 import { log } from "./core/log.js";
-import { isExtensionEnabled } from "../settings.js";
+import { getExtensionSettings, isExtensionEnabled } from "../settings.js";
 
-import { eventSource, event_types } from "/script.js";
+import { eventSource, event_types, saveSettingsDebounced } from "/script.js";
 import {
   power_user,
   persona_description_positions,
@@ -23,8 +23,15 @@ const DEFAULT_WRAPPER_TEMPLATE = `<tag>${WRAPPER_PLACEHOLDER}</tag>`;
  *
  * So we:
  * - apply runtime patch on GENERATION_AFTER_COMMANDS (and keep generate_interceptor as a safety net),
- * - restore on GENERATION_ENDED / GENERATION_STOPPED,
- * - never save settings / never touch DOM, only runtime power_user values.
+ * - restore as soon as the request payload is built (GENERATE_AFTER_DATA), with
+ *   GENERATION_ENDED / GENERATION_STOPPED / a timer as fallbacks,
+ * - never touch DOM, only runtime power_user values.
+ *
+ * `power_user` is persisted as a whole by SillyTavern, so any settings save that happens while
+ * patched writes the patched description to disk. Upstream SillyTavern loads that value back
+ * as the persona description on the next start. To make that recoverable, the original values
+ * are recorded in extension settings (saved in the same payload) while patched, and
+ * `recoverStalePatch()` puts them back on startup.
  */
 
 /**
@@ -35,7 +42,7 @@ const DEFAULT_WRAPPER_TEMPLATE = `<tag>${WRAPPER_PLACEHOLDER}</tag>`;
  * @property {number} persona_description_role
  */
 
-/** @type {{active: boolean, snapshot: PersonaSnapshot|null, restoreTimer?: number}|null} */
+/** @type {{active: boolean, snapshot: PersonaSnapshot|null, avatarId?: string, restoreTimer?: number}|null} */
 let patchState = null;
 
 function ensurePatchState() {
@@ -94,6 +101,33 @@ function parseEscapes(raw) {
     else out += next;
   }
   return out;
+}
+
+/**
+ * Prompt text of one item. Documents are wrapped in their label template
+ * ({{NAME}} = block title, {{CONTENT}} = extracted text) unless the label is turned off.
+ * Returns null for empty items.
+ *
+ * @param {any} item
+ * @returns {string|null}
+ */
+function getItemPromptText(item) {
+  const raw = String(item?.text ?? "");
+  // NOTE: emptiness check uses trim(), but the injected value must stay unmodified.
+  if (raw.trim().length === 0) return null;
+  if (item?.kind !== "document" || item?.doc?.labelEnabled === false) return raw;
+
+  const tpl = String(
+    item?.doc?.labelTemplate ?? PME.documents.defaultLabelTemplate
+  );
+  if (!tpl.trim()) return raw;
+  const name = String(item?.title ?? item?.doc?.fileName ?? "");
+  // Same fallback as the persona wrapper: never drop the content.
+  if (!tpl.includes("{{CONTENT}}")) return `${tpl}${raw}`;
+  // Function replacer so "$&"-style sequences in the text are not interpreted.
+  return tpl.replace(/\{\{(NAME|CONTENT)\}\}/g, (_m, key) =>
+    key === "NAME" ? name : raw
+  );
 }
 
 /**
@@ -193,9 +227,8 @@ function collectEnabledAdditionalTexts(descriptor, ctx) {
 
     if (b.type === "item") {
       if (!isEntityActive(b)) continue;
-      const raw = String(b.text ?? "");
-      // NOTE: emptiness check uses trim(), but the injected value must stay unmodified.
-      if (raw.trim().length > 0) out.push(raw);
+      const text = getItemPromptText(b);
+      if (text !== null) out.push(text);
       continue;
     }
 
@@ -206,14 +239,33 @@ function collectEnabledAdditionalTexts(descriptor, ctx) {
       for (const it of items) {
         if (!it || typeof it !== "object") continue;
         if (!isEntityActive(it)) continue;
-        const raw = String(it.text ?? "");
-        // NOTE: emptiness check uses trim(), but the injected value must stay unmodified.
-        if (raw.trim().length > 0) out.push(raw);
+        const text = getItemPromptText(it);
+        if (text !== null) out.push(text);
       }
     }
   }
 
   return out;
+}
+
+/**
+ * Text the host appends to the persona description on its own.
+ *
+ * SillyBunny composes `power_user.persona_description` as
+ * `descriptor.description` + active "Scenario Notes". When PME replaces the base with the
+ * unlinked (extended) description, those notes must be carried over, not dropped.
+ * On upstream SillyTavern the composed value equals the base, so this returns "".
+ *
+ * @param {any} descriptor
+ */
+function getHostAppendedText(descriptor) {
+  if (!Array.isArray(descriptor?.appendices) || !descriptor.appendices.length)
+    return "";
+  const composed = String(power_user?.persona_description ?? "").trim();
+  const base = String(descriptor?.description ?? "").trim();
+  if (!base) return composed;
+  if (!composed.startsWith(base)) return "";
+  return composed.slice(base.length).trim();
 }
 
 /**
@@ -230,9 +282,15 @@ function buildFinalPersona(descriptor) {
     settings.additionalJoiner || DEFAULT_ADDITIONAL_JOINER_RAW
   );
 
+  const hostAppended = linked ? "" : getHostAppendedText(descriptor);
+  const localBase = String(descriptor?.pme?.local?.description ?? "");
   const baseRaw = linked
     ? String(power_user?.persona_description ?? "")
-    : String(descriptor?.pme?.local?.description ?? "");
+    : hostAppended
+      ? localBase.trim()
+        ? `${localBase}\n\n${hostAppended}`
+        : hostAppended
+      : localBase;
 
   const ctx = getContext?.() ?? null;
   const additions = collectEnabledAdditionalTexts(descriptor, ctx);
@@ -291,6 +349,22 @@ function buildFinalPersona(descriptor) {
   };
 }
 
+/**
+ * Text PME would currently append for the active persona (Additional Descriptions and
+ * documents that are active in the current chat), joined like in the prompt.
+ * Used by the UI to show the per-prompt token cost.
+ */
+export function getActiveAdditionsText() {
+  const descriptor = getOrCreatePersonaDescriptor();
+  const joiner = parseEscapes(
+    getPmeSettingsSnapshot(descriptor).additionalJoiner ||
+      DEFAULT_ADDITIONAL_JOINER_RAW
+  );
+  return collectEnabledAdditionalTexts(descriptor, getContext?.() ?? null).join(
+    joiner
+  );
+}
+
 function snapshotPowerUser() {
   return {
     persona_description: String(power_user?.persona_description ?? ""),
@@ -347,7 +421,13 @@ function applyPatch(reason) {
   }
 
   st.snapshot = snap;
+  st.avatarId = String(user_avatar ?? "");
   st.active = true;
+  getExtensionSettings().pendingRestore = {
+    avatarId: st.avatarId,
+    snapshot: snap,
+    patchedText: finalText,
+  };
 
   power_user.persona_description = finalText;
   power_user.persona_description_position = finalPosition;
@@ -375,10 +455,16 @@ function restorePatch(reason) {
   if (!st.active) return;
 
   try {
-    restorePowerUser(st.snapshot);
+    // If the persona was switched while patched, ST has already loaded the new
+    // persona's values into power_user. Restoring would clobber them with the old ones.
+    if (String(user_avatar ?? "") === st.avatarId) {
+      restorePowerUser(st.snapshot);
+    }
   } finally {
     st.active = false;
     st.snapshot = null;
+    st.avatarId = undefined;
+    delete getExtensionSettings().pendingRestore;
     if (st.restoreTimer) {
       window.clearTimeout(st.restoreTimer);
       st.restoreTimer = undefined;
@@ -386,6 +472,30 @@ function restorePatch(reason) {
   }
 
   log(`Restored persona injection (${reason})`);
+}
+
+/**
+ * Undo a patch that was persisted by a settings save during generation and never restored
+ * (e.g. the page was closed mid-generation). Only acts when the stored description is still
+ * exactly the patched text, so user edits made since are never overwritten.
+ */
+function recoverStalePatch() {
+  const settings = getExtensionSettings();
+  const pending = settings.pendingRestore;
+  if (!pending) return;
+  delete settings.pendingRestore;
+
+  if (
+    !ensurePatchState().active &&
+    pending.snapshot &&
+    String(user_avatar ?? "") === String(pending.avatarId) &&
+    String(power_user?.persona_description ?? "") ===
+      String(pending.patchedText ?? "")
+  ) {
+    restorePowerUser(pending.snapshot);
+    log("Recovered persona description from an unfinished generation patch");
+  }
+  saveSettingsDebounced();
 }
 
 let hooksInstalled = false;
@@ -409,6 +519,14 @@ export function registerGenerateInterceptor() {
       }
     );
 
+    // Restore right after the prompt payload is built: nothing reads the persona
+    // description later, and it keeps the window where a settings save could persist
+    // the patched value as small as possible.
+    eventSource.on(event_types.GENERATE_AFTER_DATA, (_data, dryRun) => {
+      if (dryRun) return;
+      restorePatch("GENERATE_AFTER_DATA");
+    });
+
     // Restore in all normal/abort paths.
     eventSource.on(event_types.GENERATION_ENDED, () =>
       restorePatch("GENERATION_ENDED")
@@ -416,6 +534,12 @@ export function registerGenerateInterceptor() {
     eventSource.on(event_types.GENERATION_STOPPED, () =>
       restorePatch("GENERATION_STOPPED")
     );
+    eventSource.on(event_types.APP_READY, recoverStalePatch);
+    if (event_types.PERSONA_CHANGED) {
+      eventSource.on(event_types.PERSONA_CHANGED, () =>
+        restorePatch("PERSONA_CHANGED")
+      );
+    }
   }
 
   if (typeof globalThis[PME.interceptor.globalKey] === "function") {

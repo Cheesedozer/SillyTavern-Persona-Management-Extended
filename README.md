@@ -47,7 +47,7 @@ When Advanced mode is ON, SillyTavern’s default Persona Management content is 
 - **Connections & Global Settings**:
   - The native SillyTavern controls are shown inside PME (so everything works the same)
 - **Additional Descriptions**:
-  - Add unlimited **items** and **groups**
+  - Add unlimited **items**, **groups** and **documents**
   - Enable/disable, collapse, delete
   - Manual reorder (up/down)
   - Fullscreen editor
@@ -69,17 +69,44 @@ PME lets you toggle:
 
 ---
 
+### Persona documents
+
+Attach files to a persona and their text is added to the prompt, just like an Additional Description.
+
+- Click the **upload** button in the Additional Descriptions header (or in a group's header) and pick a file.
+- Supported formats: `.txt`, `.md`, `.pdf`, `.docx`, `.html`, `.epub`, plus plain-text files such as `.csv`, `.json`, `.yaml`.
+- The text is **extracted once** and stored in the persona, so persona backup/restore and **Duplicate Persona** carry it along. The original file is not kept.
+- A document is a normal block: reorder it, put it in a group, toggle it, or auto-enable it with Connections / Match rules.
+- Document text is **read-only**. Use **Replace file** to upload a new version (title, rules and label are kept), or **Convert to editable item** to turn it into a regular Additional Description.
+- In the prompt each document is wrapped in a label, by default:
+
+  ```
+  <document name="{{NAME}}">
+  {{CONTENT}}
+  </document>
+  ```
+
+  `{{NAME}}` is the block title (the file name by default), `{{CONTENT}}` is the document text. The template can be edited, or the label turned off, per document.
+- The whole document is sent with **every** message while it is active. Each document shows its token count and is highlighted above the **Document token warning** limit (Extensions settings, default 4000). The Additional Descriptions header shows how many tokens all active blocks add to each prompt.
+
+### SillyBunny support
+
+PME works on upstream SillyTavern and on [SillyBunny](https://github.com/SillyBunnyTeam/SillyBunny).
+On SillyBunny, Advanced mode also shows the native **Scenario Notes**, persona lock status and the "create character from persona" button, and active Scenario Notes stay in the prompt for unlinked personas as well.
+
+---
+
 ## How prompt injection works (simple explanation)
 
 When you generate a message, PME builds a **final persona text** like this:
 
 1. Take the persona description (original or extended, depending on Linked/Unlinked)
-2. Append all **enabled Additional Descriptions** (in your chosen order)
+2. Append all **enabled Additional Descriptions and documents** (in your chosen order)
 3. Optionally wrap it with a template (if enabled)
 
-This final text is applied **temporarily** for the generation, then restored.
+This final text is applied **temporarily** for the generation and restored as soon as the prompt is built.
 
-So your saved persona description is not permanently “polluted” by injected text.
+So your saved persona description is not permanently “polluted” by injected text. If the browser is closed in the middle of a generation, PME repairs the saved description on the next start.
 
 ---
 
@@ -87,7 +114,7 @@ So your saved persona description is not permanently “polluted” by injected 
 
 Install via SillyTavern’s extension installer using the repository URL:
 
-`https://github.com/dmitryplyaskin/SillyTavern-Persona-Management-Extended`
+`https://github.com/cheesedozer/SillyTavern-Persona-Management-Extended`
 
 ---
 
@@ -162,6 +189,7 @@ In Advanced mode, open the **Settings** card:
 In **Extensions → Persona Management Extended**:
 
 - **Enable extension**: master toggle (when OFF, PME won’t affect generation)
+- **Document token warning**: documents above this many tokens are highlighted (0 = off)
 - **Import from User Persona Extended**: automatically imports your Additional Descriptions from the old extension
 - **Clear All Extension Data**: deletes PME data for all personas (with confirmation)
 
@@ -170,7 +198,8 @@ In **Extensions → Persona Management Extended**:
 ## Notes about data & backups
 
 - PME saves data **per persona**.
-- Persona backup/restore in SillyTavern will also include PME data (because it’s stored inside persona metadata).
+- Persona backup/restore in SillyTavern will also include PME data (because it’s stored inside persona metadata), including document text.
+- Documents are stored inside SillyTavern's settings file. Keeping them to a few thousand tokens each keeps settings saves fast.
 
 ---
 
@@ -186,6 +215,11 @@ In **Extensions → Persona Management Extended**:
   - Check **Extensions → Persona Management Extended → Enable extension**.
   - Make sure blocks are enabled (or correctly configured in AUTO mode).
 
+- **A document can't be imported**
+
+  - Scanned PDFs have no text layer; run them through OCR first.
+  - `.doc` (old Word format) is not supported; save it as `.docx`.
+
 - **AUTO mode doesn’t activate**
   - If you use Connections: confirm you added the correct chat / character.
   - If you use Match: the rule matches the character’s **Description** field (not the name).
@@ -196,13 +230,14 @@ In **Extensions → Persona Management Extended**:
 
 See `LICENSE`.
 
-## Author
+## Authors
 
-Dmitry Plyaskin
+- Dmitry Plyaskin — original author ([upstream repository](https://github.com/dmitryplyaskin/SillyTavern-Persona-Management-Extended))
+- cheesedozer — fork maintainer (SillyBunny support, persona documents)
 
-**Telegram Channel**: [@SillyInnkeeper](https://t.me/SillyInnkeeper) — news, updates, and project discussions.
+**Original author's Telegram channel**: [@SillyInnkeeper](https://t.me/SillyInnkeeper) — news, updates, and project discussions.
 
 ## Support / Issues
 
 Please use the GitHub repository page:
-`https://github.com/dmitryplyaskin/SillyTavern-Persona-Management-Extended`
+`https://github.com/cheesedozer/SillyTavern-Persona-Management-Extended`

@@ -1,9 +1,11 @@
 import { t } from "../../../../../../i18n.js";
 import { el } from "./dom.js";
 import {
+  addDocument,
   addGroup,
   addItem,
   addItemToGroup,
+  convertDocumentToItem,
   listBlocks,
   moveBlock,
   moveItemInGroup,
@@ -11,9 +13,92 @@ import {
   patchItem,
   removeGroup,
   removeItem,
+  replaceDocument,
 } from "../../store/personaStore.js";
+import {
+  DOCUMENT_ACCEPT,
+  extractDocumentText,
+  isSupportedDocument,
+} from "../../documents/extract.js";
+import { getActiveAdditionsText } from "../../injector.js";
+import { getDocTokenWarning } from "../../../settings.js";
 import { callGenericPopup, POPUP_TYPE } from "/scripts/popup.js";
 import { getTokenCountAsync } from "/scripts/tokenizers.js";
+
+/**
+ * Listeners notified when anything that affects the injected text changes
+ * (text edits, enable toggles, rules), used for the "Active: N tokens" header.
+ * @type {Set<() => void>}
+ */
+const contentListeners = new Set();
+function notifyContentChanged() {
+  for (const fn of contentListeners) fn();
+}
+
+/**
+ * Ask the user for a document file.
+ * @returns {Promise<File|null>}
+ */
+function pickDocumentFile() {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = DOCUMENT_ACCEPT;
+    input.addEventListener("change", () => resolve(input.files?.[0] ?? null), {
+      once: true,
+    });
+    input.addEventListener("cancel", () => resolve(null), { once: true });
+    input.click();
+  });
+}
+
+/**
+ * Pick a file and extract its text. Shows toasts on failure.
+ * @returns {Promise<{text: string, fileName: string, size: number}|null>}
+ */
+async function pickAndExtractDocument() {
+  const file = await pickDocumentFile();
+  if (!file) return null;
+  if (!isSupportedDocument(file)) {
+    toastr.warning(
+      t`Supported formats: ${DOCUMENT_ACCEPT.replaceAll(",", ", ")}`,
+      t`Unsupported file type`
+    );
+    return null;
+  }
+  try {
+    const text = await extractDocumentText(file);
+    if (!text.trim()) {
+      toastr.warning(t`No text could be extracted from ${file.name}.`);
+      return null;
+    }
+    return { text, fileName: file.name, size: file.size };
+  } catch (e) {
+    console.error("[PME] Document import failed", e);
+    toastr.error(String(e?.message ?? e), t`Could not read ${file.name}`);
+    return null;
+  }
+}
+
+/**
+ * @param {string|null} groupId
+ * @returns {Promise<boolean>} true when a document was added
+ */
+async function attachDocument(groupId = null) {
+  const doc = await pickAndExtractDocument();
+  if (!doc) return false;
+  addDocument({ title: doc.fileName, ...doc }, groupId);
+  return true;
+}
+
+/**
+ * @param {number} bytes
+ */
+function formatSize(bytes) {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
 
 function isAutoActive(entity) {
   return !!(entity?.adv?.connections?.enabled || entity?.adv?.match?.enabled);
@@ -347,6 +432,7 @@ function renderAdvancedControls(entity, { kind, patch, onAnyChange }) {
         match: { query: matchInput.value },
       }),
     });
+    notifyContentChanged();
   });
   secMatch.appendChild(matchInput);
 
@@ -382,6 +468,98 @@ function renderAdvancedControls(entity, { kind, patch, onAnyChange }) {
   return wrap;
 }
 
+/**
+ * Document-only controls: file info, replace / convert actions, and the prompt label.
+ * @param {any} item
+ * @param {{onAnyChange?: () => void}} opts
+ */
+function renderDocumentControls(item, { onAnyChange }) {
+  const doc = item.doc ?? {};
+  const wrap = el("div", "pme-doc");
+
+  const metaRow = el("div", "pme-doc-meta");
+  const info = el("div", "pme-doc-info text_muted");
+  const parts = [String(doc.fileName || item.title || "")];
+  if (doc.size) parts.push(formatSize(doc.size));
+  if (doc.importedAt)
+    parts.push(new Date(doc.importedAt).toLocaleDateString());
+  info.textContent = parts.filter(Boolean).join(" · ");
+  metaRow.appendChild(info);
+
+  const actions = el("div", "pme-doc-actions");
+  const replaceBtn = el("button", "menu_button pme-adv-btn");
+  replaceBtn.type = "button";
+  replaceBtn.innerHTML = `<i class="fa-solid fa-file-arrow-up"></i><span>${t`Replace file`}</span>`;
+  replaceBtn.title = t`Upload a new version of this document. Title, rules and label are kept.`;
+  replaceBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = await pickAndExtractDocument();
+    if (!next) return;
+    replaceDocument(item.id, next);
+    onAnyChange?.();
+  });
+  actions.appendChild(replaceBtn);
+
+  const convertBtn = el("button", "menu_button pme-adv-btn");
+  convertBtn.type = "button";
+  convertBtn.innerHTML = `<i class="fa-solid fa-pen-to-square"></i><span>${t`Convert to editable item`}</span>`;
+  convertBtn.title = t`Turn this document into a regular Additional Description you can edit. The document label is no longer added.`;
+  convertBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const ok = await callGenericPopup(
+      t`Convert "${item.title}" into an editable item? It will no longer be tied to the file or wrapped in the document label.`,
+      POPUP_TYPE.CONFIRM
+    );
+    if (!ok) return;
+    convertDocumentToItem(item.id);
+    onAnyChange?.();
+  });
+  actions.appendChild(convertBtn);
+  metaRow.appendChild(actions);
+  wrap.appendChild(metaRow);
+
+  // Label (wrapper) for this document in the prompt
+  const labelRow = el("div", "pme-doc-label");
+  const labelToggle = el("label", "checkbox_label pme-adv-checkbox");
+  const labelEnabled = el("input");
+  labelEnabled.type = "checkbox";
+  labelEnabled.checked = doc.labelEnabled !== false;
+  labelToggle.appendChild(labelEnabled);
+  labelToggle.appendChild(el("span", "", t`Wrap in document label`));
+  labelRow.appendChild(labelToggle);
+
+  const labelTemplate = el("textarea", "text_pole textarea_compact pme-doc-template");
+  labelTemplate.rows = 3;
+  labelTemplate.value = String(doc.labelTemplate ?? "");
+  labelTemplate.placeholder = '<document name="{{NAME}}">\n{{CONTENT}}\n</document>';
+  labelTemplate.classList.toggle("displayNone", !labelEnabled.checked);
+  labelRow.appendChild(labelTemplate);
+
+  const help = el(
+    "div",
+    "text_muted pme-adv-help",
+    t`{{NAME}} is replaced with the title above, {{CONTENT}} with the document text.`
+  );
+  help.classList.toggle("displayNone", !labelEnabled.checked);
+  labelRow.appendChild(help);
+
+  labelEnabled.addEventListener("input", () => {
+    patchItem(item.id, { doc: { ...item.doc, labelEnabled: labelEnabled.checked } });
+    labelTemplate.classList.toggle("displayNone", !labelEnabled.checked);
+    help.classList.toggle("displayNone", !labelEnabled.checked);
+    notifyContentChanged();
+  });
+  labelTemplate.addEventListener("input", () => {
+    patchItem(item.id, { doc: { ...item.doc, labelTemplate: labelTemplate.value } });
+    notifyContentChanged();
+  });
+  wrap.appendChild(labelRow);
+
+  return wrap;
+}
+
 function makeMoveButton(title, iconClass, { disabled = false, onClick }) {
   const btn = el(
     "button",
@@ -413,8 +591,16 @@ function renderItem(
   const row = el("div", "pme-item");
   row.dataset.pmeItemId = item.id;
   const autoActive = isAutoActive(item);
+  const isDoc = item.kind === "document";
+  row.classList.toggle("pme-item-document", isDoc);
 
   const top = el("div", "pme-item-top");
+
+  if (isDoc) {
+    const icon = el("i", "fa-solid fa-file-lines pme-doc-icon");
+    icon.title = t`Document`;
+    top.appendChild(icon);
+  }
 
   const titleInput = el("input", "text_pole pme-item-title");
   titleInput.type = "text";
@@ -422,6 +608,8 @@ function renderItem(
   titleInput.placeholder = t`Title`;
   titleInput.addEventListener("input", () => {
     patchItem(item.id, { title: titleInput.value });
+    // Document titles are used as {{NAME}} in the label.
+    if (isDoc) notifyContentChanged();
   });
   top.appendChild(titleInput);
 
@@ -438,6 +626,7 @@ function renderItem(
     enabled.addEventListener("input", () => {
       patchItem(item.id, { enabled: enabled.checked });
       row.classList.toggle("pme-item-disabled", !enabled.checked);
+      notifyContentChanged();
     });
     enabledLabel.appendChild(enabled);
     enabledLabel.appendChild(el("span", "", t`Enabled`));
@@ -469,7 +658,14 @@ function renderItem(
   deleteBtn.type = "button";
   deleteBtn.title = t`Delete`;
   deleteBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
-  deleteBtn.addEventListener("click", () => {
+  deleteBtn.addEventListener("click", async () => {
+    if (isDoc) {
+      const ok = await callGenericPopup(
+        t`Delete document "${item.title}"? Its text is stored only here.`,
+        POPUP_TYPE.CONFIRM
+      );
+      if (!ok) return;
+    }
     removeItem(item.id);
     onAnyChange?.();
   });
@@ -491,23 +687,31 @@ function renderItem(
   const body = el("div", "pme-item-body");
   body.classList.toggle("displayNone", !!item.collapsed);
 
+  if (isDoc) body.appendChild(renderDocumentControls(item, { onAnyChange }));
+
   const textarea = el("textarea", "text_pole textarea_compact pme-item-text");
   const textareaId = `pme_additional_text_${String(item.id ?? "")
     .trim()
     .replace(/[^a-zA-Z0-9_-]/g, "_")}`;
   textarea.id = textareaId;
-  textarea.rows = 4;
+  textarea.rows = isDoc ? 8 : 4;
   textarea.value = item.text ?? "";
   textarea.placeholder = t`Text to inject when enabled...`;
+  // Documents are read-only (replace the file, or convert to an editable item).
+  textarea.readOnly = isDoc;
 
   body.appendChild(textarea);
 
   const footer = el("div", "pme-item-footer");
-  const maxBtn = document.createElement("i");
-  maxBtn.className = "editor_maximize fa-solid fa-maximize right_menu_button";
-  maxBtn.title = t`Expand the editor`;
-  maxBtn.setAttribute("data-for", textareaId);
-  footer.appendChild(maxBtn);
+  if (!isDoc) {
+    const maxBtn = document.createElement("i");
+    maxBtn.className = "editor_maximize fa-solid fa-maximize right_menu_button";
+    maxBtn.title = t`Expand the editor`;
+    maxBtn.setAttribute("data-for", textareaId);
+    footer.appendChild(maxBtn);
+  } else {
+    footer.appendChild(el("span", ""));
+  }
 
   const tokenBox = el("div", "pme-token-box pme-item-token-box");
   tokenBox.appendChild(el("span", "", t`Tokens: `));
@@ -521,11 +725,20 @@ function renderItem(
   const refreshTokens = () => {
     if (tokenTimer) window.clearTimeout(tokenTimer);
     tokenTimer = window.setTimeout(async () => {
+      let count = 0;
       try {
-        const count = await getTokenCountAsync(String(textarea.value ?? ""));
-        tokenCount.textContent = String(count);
+        count = await getTokenCountAsync(String(textarea.value ?? ""));
       } catch {
-        tokenCount.textContent = "0";
+        count = 0;
+      }
+      tokenCount.textContent = String(count);
+      if (isDoc) {
+        const limit = getDocTokenWarning();
+        const tooLarge = limit > 0 && count > limit;
+        tokenBox.classList.toggle("pme-token-warning", tooLarge);
+        tokenBox.title = tooLarge
+          ? t`Larger than the document warning limit (${limit} tokens). The whole document is sent with every message while it is active.`
+          : "";
       }
     }, 250);
   };
@@ -533,15 +746,18 @@ function renderItem(
   const onTextInput = () => {
     patchItem(item.id, { text: textarea.value });
     refreshTokens();
+    notifyContentChanged();
   };
-  textarea.addEventListener("input", onTextInput);
-  try {
-    // ST "Expand editor" uses jQuery `.trigger('input')` on the original element.
-    // Native listener is not guaranteed to receive that trigger, so we bind both.
-    // eslint-disable-next-line no-undef
-    if (typeof $ === "function") $(textarea).on("input", onTextInput);
-  } catch {
-    // ignore
+  if (!isDoc) {
+    textarea.addEventListener("input", onTextInput);
+    try {
+      // ST "Expand editor" uses jQuery `.trigger('input')` on the original element.
+      // Native listener is not guaranteed to receive that trigger, so we bind both.
+      // eslint-disable-next-line no-undef
+      if (typeof $ === "function") $(textarea).on("input", onTextInput);
+    } catch {
+      // ignore
+    }
   }
 
   refreshTokens();
@@ -555,7 +771,7 @@ function renderItem(
     onAnyChange?.();
   });
 
-  // Advanced (planned)
+  // Advanced activation rules
   body.appendChild(
     renderAdvancedControls(item, {
       kind: "item",
@@ -605,6 +821,7 @@ function renderGroup(
     enabled.addEventListener("input", () => {
       patchGroup(group.id, { enabled: enabled.checked });
       wrap.classList.toggle("pme-group-disabled", !enabled.checked);
+      notifyContentChanged();
     });
     enabledLabel.appendChild(enabled);
     enabledLabel.appendChild(el("span", "", t`Enabled`));
@@ -639,6 +856,18 @@ function renderGroup(
     onAnyChange?.();
   });
   top.appendChild(addBtn);
+
+  const attachBtn = el(
+    "button",
+    "menu_button menu_button_icon pme-icon-btn pme-group-attach"
+  );
+  attachBtn.type = "button";
+  attachBtn.title = t`Attach document to group`;
+  attachBtn.innerHTML = '<i class="fa-solid fa-file-arrow-up"></i>';
+  attachBtn.addEventListener("click", async () => {
+    if (await attachDocument(group.id)) onAnyChange?.();
+  });
+  top.appendChild(attachBtn);
 
   const deleteBtn = el(
     "button",
@@ -696,7 +925,7 @@ function renderGroup(
     onAnyChange?.();
   });
 
-  // Advanced (planned) for group
+  // Advanced activation rules for group
   body.appendChild(
     renderAdvancedControls(group, {
       kind: "group",
@@ -713,7 +942,30 @@ export function createAdditionalDescriptionsCard() {
 
   const root = el("div", "pme-card pme-additional");
   const header = el("div", "pme-card-title-row");
-  header.appendChild(el("div", "pme-card-title", t`Additional Descriptions`));
+  const titleWrap = el("div", "pme-card-title");
+  titleWrap.appendChild(el("span", "", t`Additional Descriptions`));
+  const activeTokens = el("span", "pme-active-tokens text_muted");
+  activeTokens.title = t`Tokens added to every prompt by the blocks and documents active in the current chat.`;
+  titleWrap.appendChild(activeTokens);
+  header.appendChild(titleWrap);
+
+  let activeTokensTimer = /** @type {number|undefined} */ (undefined);
+  const refreshActiveTokens = () => {
+    if (activeTokensTimer) window.clearTimeout(activeTokensTimer);
+    activeTokensTimer = window.setTimeout(async () => {
+      activeTokensTimer = undefined;
+      try {
+        const text = getActiveAdditionsText();
+        const count = text ? await getTokenCountAsync(text) : 0;
+        activeTokens.textContent = t`Active: ${count} tokens`;
+      } catch {
+        activeTokens.textContent = "";
+      }
+    }, 300);
+  };
+  // One card is alive at a time; drop listeners of a previously destroyed card.
+  contentListeners.clear();
+  contentListeners.add(refreshActiveTokens);
 
   const actions = el("div", "pme-actions");
 
@@ -745,6 +997,15 @@ export function createAdditionalDescriptionsCard() {
   addGroupBtn.innerHTML = '<i class="fa-solid fa-folder-plus"></i>';
   actions.appendChild(addGroupBtn);
 
+  const attachBtn = el(
+    "button",
+    "menu_button menu_button_icon pme-icon-btn pme-attach-btn"
+  );
+  attachBtn.type = "button";
+  attachBtn.title = t`Attach document`;
+  attachBtn.innerHTML = '<i class="fa-solid fa-file-arrow-up"></i>';
+  actions.appendChild(attachBtn);
+
   const collapseBtn = el("button", "menu_button menu_button_icon pme-icon-btn");
   collapseBtn.type = "button";
   collapseBtn.title = t`Collapse`;
@@ -761,6 +1022,7 @@ export function createAdditionalDescriptionsCard() {
   body.appendChild(list);
 
   function render() {
+    refreshActiveTokens();
     list.innerHTML = "";
     const blocks = listBlocks();
     if (!blocks?.length) {
@@ -768,7 +1030,7 @@ export function createAdditionalDescriptionsCard() {
         el(
           "div",
           "text_muted",
-          t`No additional descriptions yet. Click + to add an item or G+ to add a group.`
+          t`No additional descriptions yet. Use + to add an item, the folder button to add a group, or the upload button to attach a document.`
         )
       );
       return;
@@ -811,6 +1073,10 @@ export function createAdditionalDescriptionsCard() {
     render();
   });
 
+  attachBtn.addEventListener("click", async () => {
+    if (await attachDocument()) render();
+  });
+
   function syncCollapsed() {
     body.classList.toggle("displayNone", collapsed);
     root.classList.toggle("pme-collapsed", collapsed);
@@ -841,7 +1107,7 @@ export function createAdditionalDescriptionsCard() {
           el(
             "div",
             "text_muted",
-            t`No additional descriptions yet. Click + to add an item or G+ to add a group.`
+            t`No additional descriptions yet. Use + to add an item, the folder button to add a group, or the upload button to attach a document.`
           )
         );
         return;
@@ -908,6 +1174,20 @@ export function createAdditionalDescriptionsCard() {
       render();
     });
     popupActions.appendChild(addGroupBtn2);
+
+    const attachBtn2 = el(
+      "button",
+      "menu_button menu_button_icon pme-icon-btn pme-attach-btn"
+    );
+    attachBtn2.type = "button";
+    attachBtn2.title = t`Attach document`;
+    attachBtn2.innerHTML = '<i class="fa-solid fa-file-arrow-up"></i>';
+    attachBtn2.addEventListener("click", async () => {
+      if (!(await attachDocument())) return;
+      renderPopup();
+      render();
+    });
+    popupActions.appendChild(attachBtn2);
 
     wrapper.insertBefore(popupActions, editor);
     renderPopup();

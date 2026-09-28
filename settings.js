@@ -26,10 +26,23 @@ const SETTINGS_KEY = "personaManagementExtended";
 const LEGACY_STORAGE_KEY_PREFIX = "user_persona_extended_";
 
 /**
+ * Extension folder relative to `scripts/extensions/`, derived from this module's URL
+ * so the settings template still loads if the extension folder is renamed.
+ */
+const EXTENSION_FOLDER = (() => {
+  const match = decodeURIComponent(new URL(import.meta.url).pathname).match(
+    /\/scripts\/extensions\/(.+)\/settings\.js$/
+  );
+  return match?.[1] ?? "third-party/SillyTavern-Persona-Management-Extended";
+})();
+
+/**
  * Default settings
  */
 const defaultSettings = {
   enabled: true,
+  // Document blocks above this many tokens are highlighted in the UI (0 = never).
+  docTokenWarning: PME.documents.defaultTokenWarning,
 };
 
 let settingsUIInitialized = false;
@@ -60,6 +73,26 @@ export function loadSettings() {
       extension_settings[SETTINGS_KEY].enabled !== false
     );
   }
+  $("#pme-doc-token-warning").val(getDocTokenWarning());
+}
+
+/**
+ * Token count above which a document is flagged as large (0 disables the warning).
+ */
+export function getDocTokenWarning() {
+  const value = Number(getExtensionSettings().docTokenWarning);
+  return Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : PME.documents.defaultTokenWarning;
+}
+
+/**
+ * Mutable extension settings object (persisted with SillyTavern settings).
+ * @returns {Record<string, any>}
+ */
+export function getExtensionSettings() {
+  if (!extension_settings[SETTINGS_KEY]) loadSettings();
+  return extension_settings[SETTINGS_KEY];
 }
 
 export function isExtensionEnabled() {
@@ -189,11 +222,21 @@ async function importFromUserPersonaExtended() {
       target.pme.version = 1;
       target.pme.blocks ??= [];
 
+      // Skip entries imported by a previous run (legacy ids are preserved),
+      // otherwise re-running the import duplicates items with clashing ids.
+      const existingIds = new Set();
+      for (const b of target.pme.blocks) {
+        if (b?.id) existingIds.add(String(b.id));
+        for (const it of b?.items ?? []) if (it?.id) existingIds.add(String(it.id));
+      }
+      const fresh = items.filter((it) => !existingIds.has(it.id));
+      if (!fresh.length) continue;
+
       // Flat import: legacy extension had no group semantics
-      target.pme.blocks.push(...items);
+      target.pme.blocks.push(...fresh);
 
       importedPersonaCount++;
-      importedItemCount += items.length;
+      importedItemCount += fresh.length;
     }
 
     if (importedPersonaCount === 0) {
@@ -228,7 +271,7 @@ export async function initSettingsUI() {
 
   try {
     const settingsHtml = await renderExtensionTemplateAsync(
-      "third-party/SillyTavern-Persona-Management-Extended",
+      EXTENSION_FOLDER,
       "settings"
     );
 
@@ -260,6 +303,15 @@ export async function initSettingsUI() {
       .off("change", "#pme-enabled")
       .on("change", "#pme-enabled", function () {
         extension_settings[SETTINGS_KEY].enabled = $(this).prop("checked");
+        saveSettingsDebounced();
+      });
+
+    $(document)
+      .off("input", "#pme-doc-token-warning")
+      .on("input", "#pme-doc-token-warning", function () {
+        const value = Number($(this).val());
+        if (!Number.isFinite(value) || value < 0) return;
+        extension_settings[SETTINGS_KEY].docTokenWarning = Math.floor(value);
         saveSettingsDebounced();
       });
 

@@ -104,6 +104,9 @@ export function createPersonaList({ getPowerUser, bus }) {
   let scrollTop = 0;
   let refreshTimer = /** @type {number|undefined} */ (undefined);
   let autoScrollNext = false;
+  // Bumped whenever the list is invalidated (e.g. after changing a persona image)
+  // so the browser does not keep showing a cached thumbnail.
+  let thumbVersion = 0;
 
   const root = el("div", "pme-card pme-personas");
 
@@ -312,7 +315,7 @@ export function createPersonaList({ getPowerUser, bus }) {
       img.className = "pme-persona-avatar";
       img.alt = "";
       img.loading = "lazy";
-      img.src = getThumbnailUrl("persona", id);
+      img.src = `${getThumbnailUrl("persona", id)}&v=${thumbVersion}`;
 
       const meta = el("div", "pme-persona-meta");
       const nameRow = el("div", "pme-persona-name-row");
@@ -427,7 +430,12 @@ export function createPersonaList({ getPowerUser, bus }) {
       autoScrollNext = autoScroll;
       void renderList({ autoScroll });
     },
-    update({ invalidateCache = false, autoScroll = false } = {}) {
+    update({
+      invalidateCache = false,
+      autoScroll = false,
+      bustThumbnails = false,
+    } = {}) {
+      if (bustThumbnails) thumbVersion++;
       scheduleRefresh({ invalidateCache, autoScroll });
     },
     updatePreviewOnly() {

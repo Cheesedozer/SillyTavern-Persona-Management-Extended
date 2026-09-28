@@ -42,32 +42,16 @@
   .pme-left {
     max-width: 100%;
   }
+  /* In the stacked layout, columns must take the container width instead of their
+     content width, otherwise wide rows push the panel off-screen on phones. */
+  .pme-layout {
+    align-items: stretch;
+  }
 }
 
-.pme-card-compact .pme-card-body {
-  opacity: 0.85;
-  font-size: 0.95rem;
-}
 
-.pme-header {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
 
-.pme-title {
-  font-weight: 700;
-  font-size: 1.05rem;
-}
 
-.pme-subtitle {
-  opacity: 0.75;
-  font-size: 0.9rem;
-}
 
 .pme-card {
   padding: 10px;
@@ -80,9 +64,6 @@
   font-weight: 700; 
 }
 
-.pme-card-body {
-  opacity: 0.95;
-}
 
 .pme-current-top {
   display: flex;
@@ -103,6 +84,7 @@
 
 .pme-current-buttons {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
@@ -207,6 +189,7 @@
 
 .pme-card-title-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -220,6 +203,7 @@
 
 .pme-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
@@ -655,10 +639,6 @@
   resize: vertical;
 }
 
-.pme-list {
-  margin: 0;
-  padding-left: 18px;
-}
 
 /* Settings */
 .pme-settings .menu_button i.fa-solid {
@@ -726,3 +706,108 @@
   }
 }
 
+
+/* ---------------------------------------------------------------------------
+ * SillyBunny host integration
+ * ------------------------------------------------------------------------- */
+
+/* Browse/Edit workspace tabs only switch native panels, which are hidden in Advanced mode. */
+#PersonaManagement.pme-advanced .persona-workspace-tabs {
+  display: none !important;
+}
+
+/* SillyBunny cards are drawn on a translucent shell; match its card surface so
+   content behind the panel doesn't bleed through. */
+.pme-host-sillybunny .pme-card {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--sb-radius-lg, 10px);
+  border: 1px solid
+    color-mix(in srgb, var(--sb-shell-border, rgba(255, 255, 255, 0.06)) 82%, transparent);
+  background: transparent;
+}
+
+.pme-host-sillybunny .pme-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--sb-card-bg);
+  opacity: var(--sb-shell-card-opacity, 1);
+}
+
+.pme-native-chips:not(.displayNone) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.pme-native-appendices:not(.displayNone) {
+  margin-top: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Persona documents
+ * ------------------------------------------------------------------------- */
+
+.pme-active-tokens {
+  margin-left: 8px;
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+
+.pme-doc-icon {
+  opacity: 0.8;
+}
+
+.pme-item-document .pme-item-text {
+  opacity: 0.9;
+  cursor: default;
+}
+
+.pme-doc {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pme-doc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pme-doc-info {
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.pme-doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pme-doc-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pme-doc-template {
+  font-family: var(--monoFontFamily, monospace);
+  font-size: 0.9rem;
+}
+
+.pme-token-box.pme-token-warning {
+  opacity: 1;
+  color: var(--warning, #e0a800);
+  font-weight: 600;
+}

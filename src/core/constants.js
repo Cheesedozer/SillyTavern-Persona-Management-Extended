@@ -1,6 +1,5 @@
 export const PME = {
   id: "pme",
-  displayName: "Persona Management Extended",
   storage: {
     advancedModeKey: "pme_advanced_mode",
     personaSortKey: "pme_persona_sort",
@@ -12,5 +11,10 @@ export const PME = {
   },
   interceptor: {
     globalKey: "pmeGenerateInterceptor",
+  },
+  documents: {
+    // {{NAME}} = block title (defaults to the file name), {{CONTENT}} = extracted text
+    defaultLabelTemplate: '<document name="{{NAME}}">\n{{CONTENT}}\n</document>',
+    defaultTokenWarning: 4000,
   },
 };

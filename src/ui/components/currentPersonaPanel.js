@@ -9,6 +9,7 @@ import { openWorldInfoEditor } from "/scripts/world-info.js";
 import { callGenericPopup, POPUP_RESULT, POPUP_TYPE } from "/scripts/popup.js";
 
 import { el, setHidden } from "./dom.js";
+import { borrowNative, returnAllNative } from "./nativeNodes.js";
 import { UI_EVENTS } from "../uiBus.js";
 import { t } from "../../../../../../i18n.js";
 
@@ -17,33 +18,32 @@ function clickNative(id) {
   if (node instanceof HTMLElement) node.click();
 }
 
-function syncNativePersonaControls() {
-  const nativeDesc = document.getElementById("persona_description");
-  if (nativeDesc instanceof HTMLTextAreaElement) {
-    nativeDesc.value = String(power_user.persona_description ?? "");
-  }
+/**
+ * Base (user-written) persona description of the current persona.
+ *
+ * NOTE: `power_user.persona_description` is NOT always the base text: SillyBunny composes it
+ * as base + active "Scenario Notes". Editing that composed value would bake the notes into
+ * the persona description, so edits always start from `descriptor.description`.
+ */
+function getBaseDescription() {
+  const d = getOrCreatePersonaDescriptor();
+  return String(d?.description ?? power_user.persona_description ?? "");
+}
 
-  const nativePos = document.getElementById("persona_description_position");
-  if (nativePos instanceof HTMLSelectElement) {
-    nativePos.value = String(
-      Number(
-        power_user.persona_description_position ??
-          persona_description_positions.IN_PROMPT
-      )
-    );
-  }
-
-  const nativeDepth = document.getElementById("persona_depth_value");
-  if (nativeDepth instanceof HTMLInputElement) {
-    nativeDepth.value = String(
-      Number(power_user.persona_description_depth ?? 2)
-    );
-  }
-
-  const nativeRole = document.getElementById("persona_depth_role");
-  if (nativeRole instanceof HTMLSelectElement) {
-    nativeRole.value = String(Number(power_user.persona_description_role ?? 0));
-  }
+/**
+ * Write a value through a native Persona Management control so the host's own
+ * input handler runs (it updates power_user, the descriptor, token counts, and on
+ * SillyBunny recomposes Scenario Notes).
+ * @param {string} id
+ * @param {string|number} value
+ * @returns {boolean} false when the native control is missing
+ */
+function writeNative(id, value) {
+  const node = document.getElementById(id);
+  if (!node || typeof $ !== "function") return false;
+  // eslint-disable-next-line no-undef
+  $(node).val(String(value)).trigger("input");
+  return true;
 }
 
 function makeIconButton(title, iconClass, onClick, { danger = false } = {}) {
@@ -94,7 +94,7 @@ export function createCurrentPersonaPanel({ getPersonaName, bus }) {
   function snapshotNativeToLocal() {
     const d = getDescriptor();
     ensurePme(d);
-    d.pme.local.description = String(power_user.persona_description ?? "");
+    d.pme.local.description = getBaseDescription();
     d.pme.local.position = Number(
       power_user.persona_description_position ??
         persona_description_positions.IN_PROMPT
@@ -107,19 +107,51 @@ export function createCurrentPersonaPanel({ getPersonaName, bus }) {
     const d = getDescriptor();
     ensurePme(d);
 
-    power_user.persona_description = String(d.pme.local.description ?? "");
-    power_user.persona_description_position = Number(d.pme.local.position);
-    power_user.persona_description_depth = Number(d.pme.local.depth);
-    power_user.persona_description_role = Number(d.pme.local.role);
+    setLinkedValue("description", String(d.pme.local.description ?? ""));
+    setLinkedValue("position", Number(d.pme.local.position));
+    setLinkedValue("depth", Number(d.pme.local.depth));
+    setLinkedValue("role", Number(d.pme.local.role));
 
-    d.description = power_user.persona_description;
-    d.position = power_user.persona_description_position;
-    d.depth = power_user.persona_description_depth;
-    d.role = power_user.persona_description_role;
-
-    saveSettingsDebounced();
-    syncNativePersonaControls();
     bus?.emit(UI_EVENTS.PERSONA_DESC_CHANGED, {});
+  }
+
+  const LINKED_FIELDS = {
+    description: {
+      nativeId: "persona_description",
+      powerKey: "persona_description",
+      descKey: "description",
+    },
+    position: {
+      nativeId: "persona_description_position",
+      powerKey: "persona_description_position",
+      descKey: "position",
+    },
+    depth: {
+      nativeId: "persona_depth_value",
+      powerKey: "persona_description_depth",
+      descKey: "depth",
+    },
+    role: {
+      nativeId: "persona_depth_role",
+      powerKey: "persona_description_role",
+      descKey: "role",
+    },
+  };
+
+  /**
+   * Update a field of the original (linked) persona.
+   * Prefers the native control so the host's handler owns persistence; falls back to
+   * writing power_user + descriptor directly if the control is missing.
+   * @param {keyof typeof LINKED_FIELDS} field
+   * @param {string|number} value
+   */
+  function setLinkedValue(field, value) {
+    const f = LINKED_FIELDS[field];
+    if (writeNative(f.nativeId, value)) return;
+    const d = getDescriptor();
+    power_user[f.powerKey] = value;
+    d[f.descKey] = value;
+    saveSettingsDebounced();
   }
 
   // Header
@@ -229,6 +261,14 @@ export function createCurrentPersonaPanel({ getPersonaName, bus }) {
       );
     })
   );
+  // SillyBunny-only: "Create character from persona"
+  if (document.getElementById("persona_to_character_button")) {
+    buttons.appendChild(
+      makeIconButton(t`Create Character from Persona`, "fa-address-card", () => {
+        clickNative("persona_to_character_button");
+      })
+    );
+  }
   buttons.appendChild(
     makeIconButton(t`Duplicate Persona`, "fa-clone", () => {
       clickNative("persona_duplicate_button");
@@ -257,6 +297,10 @@ export function createCurrentPersonaPanel({ getPersonaName, bus }) {
   header.appendChild(buttons);
   root.appendChild(header);
 
+  // SillyBunny-only: persona lock status chips (borrowed from the native UI in update()).
+  const chipsSlot = el("div", "pme-native-chips");
+  root.appendChild(chipsSlot);
+
   // Description header
   const descHeader = el("div", "pme-section-header");
   descHeader.appendChild(el("div", "pme-section-title", t`Persona Description`));
@@ -274,6 +318,18 @@ export function createCurrentPersonaPanel({ getPersonaName, bus }) {
   textarea.placeholder = t`Example:\n[{{user}} is a 28-year-old Romanian cat girl.]`;
   textarea.autocomplete = "off";
   root.appendChild(textarea);
+
+  // SillyBunny-only: "Scenario Notes" (persona appendices). They are part of the prompt
+  // (composed into power_user.persona_description), so they must stay reachable in Advanced mode.
+  const appendicesSlot = el("div", "pme-native-appendices");
+  root.appendChild(appendicesSlot);
+
+  function borrowSillyBunnyBlocks() {
+    const chips = document.getElementById("persona_selected_chips");
+    setHidden(chipsSlot, !borrowNative(chips, chipsSlot));
+    const appendices = document.querySelector(".persona-appendices-block");
+    setHidden(appendicesSlot, !borrowNative(appendices, appendicesSlot));
+  }
 
   // Position + tokens header
   const posHeader = el("div", "pme-position-header");
@@ -374,10 +430,7 @@ export function createCurrentPersonaPanel({ getPersonaName, bus }) {
     ensurePme(d);
 
     if (isLinked()) {
-      power_user.persona_description = next;
-      d.description = power_user.persona_description;
-      saveSettingsDebounced();
-      syncNativePersonaControls();
+      setLinkedValue("description", next);
     } else {
       d.pme.local.description = next;
       saveSettingsDebounced();
@@ -400,10 +453,7 @@ export function createCurrentPersonaPanel({ getPersonaName, bus }) {
     const d = getDescriptor();
     ensurePme(d);
     if (isLinked()) {
-      power_user.persona_description_position = Number(posSelect.value);
-      d.position = power_user.persona_description_position;
-      saveSettingsDebounced();
-      syncNativePersonaControls();
+      setLinkedValue("position", Number(posSelect.value));
     } else {
       d.pme.local.position = Number(posSelect.value);
       saveSettingsDebounced();
@@ -415,10 +465,7 @@ export function createCurrentPersonaPanel({ getPersonaName, bus }) {
     const d = getDescriptor();
     ensurePme(d);
     if (isLinked()) {
-      power_user.persona_description_depth = Number(depthInput.value);
-      d.depth = power_user.persona_description_depth;
-      saveSettingsDebounced();
-      syncNativePersonaControls();
+      setLinkedValue("depth", Number(depthInput.value));
     } else {
       d.pme.local.depth = Number(depthInput.value);
       saveSettingsDebounced();
@@ -429,10 +476,7 @@ export function createCurrentPersonaPanel({ getPersonaName, bus }) {
     const d = getDescriptor();
     ensurePme(d);
     if (isLinked()) {
-      power_user.persona_description_role = Number(roleSelect.value);
-      d.role = power_user.persona_description_role;
-      saveSettingsDebounced();
-      syncNativePersonaControls();
+      setLinkedValue("role", Number(roleSelect.value));
     } else {
       d.pme.local.role = Number(roleSelect.value);
       saveSettingsDebounced();
@@ -450,7 +494,11 @@ export function createCurrentPersonaPanel({ getPersonaName, bus }) {
     mount() {
       this.update();
     },
+    destroy() {
+      returnAllNative();
+    },
     update() {
+      borrowSillyBunnyBlocks();
       // Update header title
       titleEl.textContent = String(getPersonaName?.() ?? t`[Persona Name]`);
 
@@ -461,7 +509,7 @@ export function createCurrentPersonaPanel({ getPersonaName, bus }) {
 
       // Update inputs from selected source (native or local)
       textarea.value = linked
-        ? String(power_user.persona_description ?? "")
+        ? getBaseDescription()
         : String(d.pme.local.description ?? "");
       lastDescValue = textarea.value;
 
@@ -488,9 +536,6 @@ export function createCurrentPersonaPanel({ getPersonaName, bus }) {
       updateDepthVisibility();
       refreshTokens();
       syncLorebookState();
-    },
-    syncNative() {
-      syncNativePersonaControls();
     },
   };
 

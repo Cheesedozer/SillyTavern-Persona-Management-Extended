@@ -34,7 +34,7 @@ export function createAdvancedApp(rootEl) {
     bus,
   });
 
-  const linksCard = createPersonaLinksGlobalSettingsCard({ bus });
+  const linksCard = createPersonaLinksGlobalSettingsCard();
   const additionalCard = createAdditionalDescriptionsCard();
   const settingsCard = createSettingsCard();
 
@@ -54,7 +54,11 @@ export function createAdvancedApp(rootEl) {
     personaList.updatePreviewOnly();
   });
   bus.on(UI_EVENTS.PERSONA_LIST_INVALIDATED, () => {
-    personaList.update({ invalidateCache: true, autoScroll: false });
+    personaList.update({
+      invalidateCache: true,
+      autoScroll: false,
+      bustThumbnails: true,
+    });
   });
 
   function mountOnce({ autoScroll = false } = {}) {
@@ -80,7 +84,6 @@ export function createAdvancedApp(rootEl) {
     bus,
     open({ autoScroll = false } = {}) {
       mountOnce({ autoScroll });
-      bus.emit(UI_EVENTS.UI_OPEN, { autoScroll });
       personaList.update({ invalidateCache: false, autoScroll });
       currentPersonaPanel.update();
       linksCard.update();
@@ -101,10 +104,10 @@ export function createAdvancedApp(rootEl) {
     destroy() {
       if (!mounted) return;
       mounted = false;
-      bus.emit(UI_EVENTS.UI_CLOSE, {});
       try {
         personaList.destroy?.();
         linksCard.destroy?.();
+        currentPersonaPanel.destroy?.();
       } finally {
         restoreNativePersonaLinksBlocks();
         rootEl.innerHTML = "";

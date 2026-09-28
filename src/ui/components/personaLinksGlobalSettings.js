@@ -1,5 +1,4 @@
 import { el, setHidden } from "./dom.js";
-import { UI_EVENTS } from "../uiBus.js";
 import { t } from "../../../../../../i18n.js";
 
 /**
@@ -91,7 +90,7 @@ export function restoreNativePersonaLinksBlocks() {
   }
 }
 
-export function createPersonaLinksGlobalSettingsCard({ bus } = {}) {
+export function createPersonaLinksGlobalSettingsCard() {
   let collapsed = true;
 
   const root = el("div", "pme-card pme-links");
@@ -144,7 +143,6 @@ export function createPersonaLinksGlobalSettingsCard({ bus } = {}) {
     e.stopPropagation();
     collapsed = !collapsed;
     syncCollapsedUI();
-    bus?.emit(UI_EVENTS.LINKS_TOGGLED, { collapsed });
     if (!collapsed) {
       // Ensure native controls are visible and attached when expanding
       relocateNativeBlocks(body);
