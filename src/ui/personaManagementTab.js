@@ -7,6 +7,7 @@ import {
   setAdvancedModeEnabled,
 } from "../core/mode.js";
 import { log, warn } from "../core/log.js";
+import { isSillyBunny } from "../core/host.js";
 import { createAdvancedApp } from "./advancedApp.js";
 
 function getPersonaManagementRoot() {
@@ -153,7 +154,11 @@ export function applyMode() {
     defaultBlock.classList.toggle("displayNone", advancedEnabled);
   }
 
+  // Host hooks for CSS: hide host-only chrome in Advanced mode, adopt SillyBunny card styling.
+  container.classList.toggle("pme-advanced", advancedEnabled);
+
   const root = getOrCreateAdvancedRoot(container);
+  root.classList.toggle("pme-host-sillybunny", isSillyBunny());
   const wasVisible = !root.classList.contains("displayNone");
   root.classList.toggle("displayNone", !advancedEnabled);
 

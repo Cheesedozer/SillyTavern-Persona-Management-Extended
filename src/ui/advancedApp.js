@@ -107,6 +107,7 @@ export function createAdvancedApp(rootEl) {
       try {
         personaList.destroy?.();
         linksCard.destroy?.();
+        currentPersonaPanel.destroy?.();
       } finally {
         restoreNativePersonaLinksBlocks();
         rootEl.innerHTML = "";

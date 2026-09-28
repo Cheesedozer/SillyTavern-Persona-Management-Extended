@@ -73,6 +73,15 @@ export function loadSettings() {
   }
 }
 
+/**
+ * Mutable extension settings object (persisted with SillyTavern settings).
+ * @returns {Record<string, any>}
+ */
+export function getExtensionSettings() {
+  if (!extension_settings[SETTINGS_KEY]) loadSettings();
+  return extension_settings[SETTINGS_KEY];
+}
+
 export function isExtensionEnabled() {
   if (!extension_settings[SETTINGS_KEY]) {
     loadSettings();
