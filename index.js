@@ -12,6 +12,7 @@ import {
 } from "./src/ui/personaManagementTab.js";
 import { registerGenerateInterceptor } from "./src/injector.js";
 import { initSettingsUI, loadSettings } from "./settings.js";
+import { registerPersonaDuplicateHook } from "./src/store/personaStore.js";
 
 function tryInitUI() {
   try {
@@ -29,6 +30,7 @@ function init() {
   loadSettings();
 
   registerGenerateInterceptor();
+  registerPersonaDuplicateHook();
 
   // 1) App ready hook (safe point where ST UI exists)
   eventSource.on(event_types.APP_READY, () => {

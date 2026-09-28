@@ -189,6 +189,7 @@
 
 .pme-card-title-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -202,6 +203,7 @@
 
 .pme-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
@@ -745,4 +747,67 @@
 
 .pme-native-appendices:not(.displayNone) {
   margin-top: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Persona documents
+ * ------------------------------------------------------------------------- */
+
+.pme-active-tokens {
+  margin-left: 8px;
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+
+.pme-doc-icon {
+  opacity: 0.8;
+}
+
+.pme-item-document .pme-item-text {
+  opacity: 0.9;
+  cursor: default;
+}
+
+.pme-doc {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pme-doc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pme-doc-info {
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.pme-doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pme-doc-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pme-doc-template {
+  font-family: var(--monoFontFamily, monospace);
+  font-size: 0.9rem;
+}
+
+.pme-token-box.pme-token-warning {
+  opacity: 1;
+  color: var(--warning, #e0a800);
+  font-weight: 600;
 }

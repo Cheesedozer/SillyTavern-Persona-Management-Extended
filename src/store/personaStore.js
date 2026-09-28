@@ -1,5 +1,17 @@
-import { saveSettingsDebounced } from "/script.js";
+import { eventSource, event_types, saveSettingsDebounced } from "/script.js";
+import { power_user } from "/scripts/power-user.js";
+import { PME } from "../core/constants.js";
 import { getOrCreatePersonaDescriptor } from "/scripts/personas.js";
+
+/**
+ * Metadata of a document item (text was extracted from an uploaded file).
+ * @typedef {object} PmeDocMeta
+ * @property {string} fileName
+ * @property {number} size Original file size in bytes
+ * @property {number} importedAt Unix ms
+ * @property {boolean} labelEnabled Wrap the text in `labelTemplate` in the prompt
+ * @property {string} labelTemplate Supports {{NAME}} and {{CONTENT}}
+ */
 
 /**
  * @typedef {object} PmeItem
@@ -8,6 +20,8 @@ import { getOrCreatePersonaDescriptor } from "/scripts/personas.js";
  * @property {string} text
  * @property {boolean} enabled
  * @property {boolean} collapsed
+ * @property {"text"|"document"} [kind] Missing means "text"
+ * @property {PmeDocMeta} [doc] Only for kind === "document"
  * @property {{advancedOpen?: boolean, connections?: {enabled?: boolean, chats?: string[], characters?: string[]}, match?: {enabled?: boolean, query?: string}}} [adv]
  */
 
@@ -109,6 +123,25 @@ function normalizeAdv(target) {
 }
 
 /**
+ * @param {any} item
+ */
+function normalizeItemKind(item) {
+  if (item.kind !== "document") {
+    delete item.kind;
+    delete item.doc;
+    return;
+  }
+  item.doc ??= {};
+  if (typeof item.doc !== "object") item.doc = {};
+  item.doc.fileName = String(item.doc.fileName ?? item.title ?? "");
+  item.doc.size = Number(item.doc.size) || 0;
+  item.doc.importedAt = Number(item.doc.importedAt) || 0;
+  if (typeof item.doc.labelEnabled !== "boolean") item.doc.labelEnabled = true;
+  if (typeof item.doc.labelTemplate !== "string")
+    item.doc.labelTemplate = PME.documents.defaultLabelTemplate;
+}
+
+/**
  * Returns (and initializes) PME storage for current persona.
  * @returns {PmeData}
  */
@@ -140,6 +173,7 @@ export function getPmeData() {
       b.enabled = b.enabled ?? true;
       b.collapsed = b.collapsed ?? false;
       normalizeAdv(b);
+      normalizeItemKind(b);
     } else if (b?.type === "group") {
       b.id = String(b.id ?? "").trim() || makeId();
       b.title = String(b.title ?? "").trim() || "Group";
@@ -154,6 +188,7 @@ export function getPmeData() {
         it.enabled = it.enabled ?? true;
         it.collapsed = it.collapsed ?? false;
         normalizeAdv(it);
+        normalizeItemKind(it);
       }
     }
   }
@@ -347,4 +382,105 @@ export function moveItemInGroup(groupId, itemId, delta) {
   group.items[idx] = group.items[next];
   group.items[next] = tmp;
   savePmeData();
+}
+
+/**
+ * Add a document item (text already extracted) at the top level or into a group.
+ * @param {{title: string, text: string, fileName: string, size: number}} input
+ * @param {string|null} [groupId]
+ * @returns {PmeItem|null}
+ */
+export function addDocument({ title, text, fileName, size }, groupId = null) {
+  const data = getPmeData();
+  const item = {
+    id: makeId(),
+    title: String(title ?? "").trim() || String(fileName ?? "") || "Document",
+    text: String(text ?? ""),
+    enabled: true,
+    collapsed: true,
+    kind: "document",
+    doc: {
+      fileName: String(fileName ?? ""),
+      size: Number(size) || 0,
+      importedAt: Date.now(),
+      labelEnabled: true,
+      labelTemplate: PME.documents.defaultLabelTemplate,
+    },
+    adv: makeDefaultAdv(),
+  };
+
+  if (groupId) {
+    const group = data.blocks.find((b) => b.type === "group" && b.id === groupId);
+    if (!group) return null;
+    group.items ??= [];
+    group.items.push(item);
+  } else {
+    data.blocks.push({ type: "item", ...item });
+  }
+  savePmeData();
+  return item;
+}
+
+/**
+ * @param {string} id
+ * @returns {PmeItem|null}
+ */
+function findItem(id) {
+  for (const b of getPmeData().blocks) {
+    if (b.type === "item" && b.id === id) return b;
+    if (b.type === "group") {
+      const it = (b.items ?? []).find((x) => x.id === id);
+      if (it) return it;
+    }
+  }
+  return null;
+}
+
+/**
+ * Replace a document's text with a newly uploaded file, keeping title, rules and label settings.
+ * @param {string} id
+ * @param {{text: string, fileName: string, size: number}} input
+ */
+export function replaceDocument(id, { text, fileName, size }) {
+  const item = findItem(id);
+  if (!item || item.kind !== "document") return;
+  item.text = String(text ?? "");
+  Object.assign(item.doc, {
+    fileName: String(fileName ?? ""),
+    size: Number(size) || 0,
+    importedAt: Date.now(),
+  });
+  savePmeData();
+}
+
+/**
+ * Turn a document into a regular, editable Additional Description item.
+ * The extracted text is kept as-is (without the document label).
+ * @param {string} id
+ */
+export function convertDocumentToItem(id) {
+  const item = findItem(id);
+  if (!item || item.kind !== "document") return;
+  delete item.kind;
+  delete item.doc;
+  item.collapsed = false;
+  savePmeData();
+}
+
+/**
+ * SillyTavern's "Duplicate Persona" copies only the core fields, so PME data
+ * (Additional Descriptions, documents, linked/unlinked state) was lost on the copy.
+ */
+export function registerPersonaDuplicateHook() {
+  if (!event_types.PERSONA_CREATED) return;
+  eventSource.on(event_types.PERSONA_CREATED, (data) => {
+    const from = data?.duplicatedFromAvatarId;
+    const to = data?.avatarId;
+    if (!from || !to || from === to) return;
+    const source = power_user.persona_descriptions?.[from]?.pme;
+    const target = power_user.persona_descriptions?.[to];
+    if (!source || !target || target.pme) return;
+    target.pme = JSON.parse(JSON.stringify(source));
+    saveSettingsDebounced();
+  });
 }

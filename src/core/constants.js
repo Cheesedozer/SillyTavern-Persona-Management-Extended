@@ -12,4 +12,9 @@ export const PME = {
   interceptor: {
     globalKey: "pmeGenerateInterceptor",
   },
+  documents: {
+    // {{NAME}} = block title (defaults to the file name), {{CONTENT}} = extracted text
+    defaultLabelTemplate: '<document name="{{NAME}}">\n{{CONTENT}}\n</document>',
+    defaultTokenWarning: 4000,
+  },
 };

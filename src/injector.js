@@ -104,6 +104,33 @@ function parseEscapes(raw) {
 }
 
 /**
+ * Prompt text of one item. Documents are wrapped in their label template
+ * ({{NAME}} = block title, {{CONTENT}} = extracted text) unless the label is turned off.
+ * Returns null for empty items.
+ *
+ * @param {any} item
+ * @returns {string|null}
+ */
+function getItemPromptText(item) {
+  const raw = String(item?.text ?? "");
+  // NOTE: emptiness check uses trim(), but the injected value must stay unmodified.
+  if (raw.trim().length === 0) return null;
+  if (item?.kind !== "document" || item?.doc?.labelEnabled === false) return raw;
+
+  const tpl = String(
+    item?.doc?.labelTemplate ?? PME.documents.defaultLabelTemplate
+  );
+  if (!tpl.trim()) return raw;
+  const name = String(item?.title ?? item?.doc?.fileName ?? "");
+  // Same fallback as the persona wrapper: never drop the content.
+  if (!tpl.includes("{{CONTENT}}")) return `${tpl}${raw}`;
+  // Function replacer so "$&"-style sequences in the text are not interpreted.
+  return tpl.replace(/\{\{(NAME|CONTENT)\}\}/g, (_m, key) =>
+    key === "NAME" ? name : raw
+  );
+}
+
+/**
  * Collect enabled Additional Description texts in the canonical order.
  * Titles/group names are UI-only and must NOT be included in the prompt.
  *
@@ -200,9 +227,8 @@ function collectEnabledAdditionalTexts(descriptor, ctx) {
 
     if (b.type === "item") {
       if (!isEntityActive(b)) continue;
-      const raw = String(b.text ?? "");
-      // NOTE: emptiness check uses trim(), but the injected value must stay unmodified.
-      if (raw.trim().length > 0) out.push(raw);
+      const text = getItemPromptText(b);
+      if (text !== null) out.push(text);
       continue;
     }
 
@@ -213,9 +239,8 @@ function collectEnabledAdditionalTexts(descriptor, ctx) {
       for (const it of items) {
         if (!it || typeof it !== "object") continue;
         if (!isEntityActive(it)) continue;
-        const raw = String(it.text ?? "");
-        // NOTE: emptiness check uses trim(), but the injected value must stay unmodified.
-        if (raw.trim().length > 0) out.push(raw);
+        const text = getItemPromptText(it);
+        if (text !== null) out.push(text);
       }
     }
   }
@@ -322,6 +347,22 @@ function buildFinalPersona(descriptor) {
     finalRole,
     hasAnyEffect: Boolean(wrappedText && String(wrappedText).trim().length > 0),
   };
+}
+
+/**
+ * Text PME would currently append for the active persona (Additional Descriptions and
+ * documents that are active in the current chat), joined like in the prompt.
+ * Used by the UI to show the per-prompt token cost.
+ */
+export function getActiveAdditionsText() {
+  const descriptor = getOrCreatePersonaDescriptor();
+  const joiner = parseEscapes(
+    getPmeSettingsSnapshot(descriptor).additionalJoiner ||
+      DEFAULT_ADDITIONAL_JOINER_RAW
+  );
+  return collectEnabledAdditionalTexts(descriptor, getContext?.() ?? null).join(
+    joiner
+  );
 }
 
 function snapshotPowerUser() {

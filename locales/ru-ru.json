@@ -6,34 +6,28 @@
   "Imports Additional Descriptions from the legacy \"User Persona Extended\" extension and adapts them to this extension's format": "Импортирует Дополнительные Описания из старого расширения \"User Persona Extended\" и адаптирует их под новый формат",
   "Clear All Extension Data": "Очистить все данные расширения",
   "This will permanently delete all saved Additional Descriptions blocks for all personas and reset extension settings": "Это действие безвозвратно удалит все сохраненные блоки Дополнительных описаний для всех персон и сбросит настройки расширения",
-
   "Are you sure you want to delete all extension data?": "Вы уверены, что хотите удалить все данные расширения?",
   "This will permanently delete:": "Это безвозвратно удалит:",
   "- All saved Additional Descriptions blocks for all personas": "- Все сохраненные блоки Дополнительных описаний для всех персон",
   "- Extension settings (will be reset to defaults)": "- Настройки расширения (сброс к значениям по умолчанию)",
   "This action cannot be undone.": "Это действие нельзя отменить.",
-
   "Deleted PME data for ${0} persona(s) and reset settings": "Удалены данные PME для ${0} персон(ы) и сброшены настройки",
   "Data Cleared": "Данные удалены",
   "Failed to clear extension data": "Не удалось очистить данные расширения",
   "Error": "Ошибка",
-
   "Import Additional Descriptions from \"User Persona Extended\"?": "Импортировать Дополнительные описания из \"User Persona Extended\"?",
   "This will:": "Это действие:",
   "- Read legacy data from account storage": "- Прочитает старые данные из хранилища аккаунта",
   "- Import legacy entries as individual items (flat list)": "- Импортирует старые записи как отдельные элементы (плоским списком)",
   "- Preserve item order (title/description/enabled)": "- Сохранит порядок (заголовок/описание/статус)",
   "No existing PME items will be deleted.": "Существующие элементы PME не будут удалены.",
-  
   "No legacy data found to import": "Старые данные для импорта не найдены",
   "Import": "Импорт",
   "Legacy data was found, but nothing could be imported": "Старые данные найдены, но импортировать ничего не удалось",
   "Imported ${0} item(s) into ${1} persona(s)": "Импортировано ${0} элемент(ов) в ${1} персон(у/ы)",
   "Import Complete": "Импорт завершен",
   "Failed to import legacy data": "Не удалось импортировать старые данные",
-
   "Advanced": "Advanced (PME)",
-
   "Personas ": "Персоны ",
   "Refresh list": "Обновить список",
   "Search...": "Поиск...",
@@ -51,7 +45,6 @@
   "No personas found.": "Персоны не найдены.",
   "[Unnamed Persona]": "[Персона без имени]",
   "Lorebook": "Лорбук",
-
   "Rename Persona": "Переименовать персону",
   "Click to set user name for all messages": "Нажмите, чтобы установить имя пользователя для всех сообщений",
   "Sync with original persona (toggle)": "Синхронизация с оригинальной персоной (переключатель)",
@@ -74,23 +67,18 @@
   "System": "System",
   "User": "User",
   "Assistant": "Assistant",
-
   "Sync with original persona: ON": "Синхронизация: ВКЛ (общая с оригиналом)",
   "Sync with original persona: OFF (editing extended version separately)": "Синхронизация: ВЫКЛ (редактируется независимая расширенная версия)",
-
   "Enable sync with the original persona?\n\nChoose which data should be treated as the source of truth:": "Включить синхронизацию с оригинальной персоной?\n\nВыберите, какие данные следует считать источником истины:",
   "Cancel": "Отмена",
   "Use original": "Использовать оригинал",
   "Use extended": "Использовать расширенную",
-
   "Additional Descriptions": "Дополнительные описания",
   "Open fullscreen": "Развернуть на полный экран",
   "Add Item": "Добавить элемент",
   "Add Group": "Добавить группу",
   "Collapse": "Свернуть",
   "Expand": "Развернуть",
-  "No additional descriptions yet. Click + to add an item or G+ to add a group.": "Здесь пока нет дополнительных описаний. Нажмите +, чтобы добавить элемент, или G+, чтобы добавить группу.",
-  
   "Title": "Заголовок",
   "Enabled": "Включено",
   "Move up": "Переместить вверх",
@@ -98,17 +86,14 @@
   "Delete": "Удалить",
   "Text to inject when enabled...": "Текст, который будет добавлен, если включено...",
   "Tokens:": "Токены: ",
-
   "Move group up": "Переместить группу вверх",
   "Move group down": "Переместить группу вниз",
   "Delete Group": "Удалить группу",
   "Group title": "Название группы",
   "No items in this group yet.": "В этой группе пока нет элементов.",
-
   "AUTO": "АВТО",
   "Auto activation enabled (manual toggle disabled for this item).": "Включена автоматическая активация (ручное переключение отключено для этого элемента).",
   "Auto activation enabled (manual toggle disabled for this group).": "Включена автоматическая активация (ручное переключение отключено для этой группы).",
-
   "Connections": "Связи (Connections)",
   "Enable": "Включить",
   "When enabled, this item is activated automatically when the current chat or character matches one of the bindings below.": "Если включено, этот элемент активируется автоматически, когда текущий чат или персонаж совпадает с одной из привязок ниже.",
@@ -128,12 +113,32 @@
   "Matches against: Character → Description.": "Проверяет на совпадение: Описание Персонажа (Character → Description).",
   "Group rules control the activation of the group as a whole. Items inside the group keep their own activation settings. If AUTO is enabled on both levels, make sure the rules are not contradictory.": "Правила группы управляют активацией всей группы в целом. Элементы внутри группы сохраняют свои собственные параметры активации. Если режим АВТО включен на обоих уровнях, убедитесь, что правила не противоречат друг другу.",
   "AUTO mode disables the manual toggle. When enabled, activation is driven by Connections and/or Match rules.": "Режим АВТО отключает ручной переключатель. Если он включен, активация определяется правилами Связей и/или Совпадений.",
-
   "Settings": "Настройки",
   "Wrapper": "Шаблон-обертка (Wrapper)",
   "When enabled, the final persona prompt generated by PME will be inserted into this template by replacing {{PROMPT}}.": "Если включено, итоговый промпт персоны, сгенерированный PME, будет вставлен в этот шаблон путем замены {{PROMPT}}.",
   "Additional Descriptions joiner": "Разделитель Дополнительных описаний",
   "String used to join enabled Additional Descriptions blocks. Supports escape sequences like \\n, \\t, \\r, and \\\\.": "Строка, используемая для соединения активных блоков. Поддерживает escape-символы, такие как \\n, \\t, \\r и \\\\.",
-
-  "Connections & Global Settings": "Связи и Глобальные Настройки"
+  "Connections & Global Settings": "Связи и Глобальные Настройки",
+  "Create Character from Persona": "Создать персонажа из персоны",
+  "Document": "Документ",
+  "Attach document": "Прикрепить документ",
+  "Attach document to group": "Прикрепить документ к группе",
+  "Replace file": "Заменить файл",
+  "Upload a new version of this document. Title, rules and label are kept.": "Загрузить новую версию документа. Название, правила и метка сохраняются.",
+  "Convert to editable item": "Преобразовать в редактируемый элемент",
+  "Turn this document into a regular Additional Description you can edit. The document label is no longer added.": "Превратить документ в обычное дополнительное описание, которое можно редактировать. Метка документа больше не добавляется.",
+  "Convert \"${0}\" into an editable item? It will no longer be tied to the file or wrapped in the document label.": "Преобразовать «${0}» в редактируемый элемент? Он больше не будет связан с файлом и не будет обёрнут в метку документа.",
+  "Delete document \"${0}\"? Its text is stored only here.": "Удалить документ «${0}»? Его текст хранится только здесь.",
+  "Wrap in document label": "Оборачивать в метку документа",
+  "{{NAME}} is replaced with the title above, {{CONTENT}} with the document text.": "{{NAME}} заменяется названием выше, {{CONTENT}} — текстом документа.",
+  "Larger than the document warning limit (${0} tokens). The whole document is sent with every message while it is active.": "Больше порога предупреждения (${0} токенов). Пока документ активен, он целиком отправляется с каждым сообщением.",
+  "Active: ${0} tokens": "Активно: ${0} токенов",
+  "Tokens added to every prompt by the blocks and documents active in the current chat.": "Токены, которые активные в текущем чате блоки и документы добавляют к каждому промпту.",
+  "Supported formats: ${0}": "Поддерживаемые форматы: ${0}",
+  "Unsupported file type": "Неподдерживаемый тип файла",
+  "No text could be extracted from ${0}.": "Не удалось извлечь текст из ${0}.",
+  "Could not read ${0}": "Не удалось прочитать ${0}",
+  "No additional descriptions yet. Use + to add an item, the folder button to add a group, or the upload button to attach a document.": "Дополнительных описаний пока нет. Нажмите +, чтобы добавить элемент, кнопку с папкой — чтобы добавить группу, или кнопку загрузки — чтобы прикрепить документ.",
+  "Document token warning": "Порог предупреждения для документов (токены)",
+  "Persona documents larger than this many tokens are highlighted. Set to 0 to turn the warning off.": "Документы персоны больше этого числа токенов подсвечиваются. 0 — отключить предупреждение."
 }

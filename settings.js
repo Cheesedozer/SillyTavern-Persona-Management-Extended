@@ -41,6 +41,8 @@ const EXTENSION_FOLDER = (() => {
  */
 const defaultSettings = {
   enabled: true,
+  // Document blocks above this many tokens are highlighted in the UI (0 = never).
+  docTokenWarning: PME.documents.defaultTokenWarning,
 };
 
 let settingsUIInitialized = false;
@@ -71,6 +73,17 @@ export function loadSettings() {
       extension_settings[SETTINGS_KEY].enabled !== false
     );
   }
+  $("#pme-doc-token-warning").val(getDocTokenWarning());
+}
+
+/**
+ * Token count above which a document is flagged as large (0 disables the warning).
+ */
+export function getDocTokenWarning() {
+  const value = Number(getExtensionSettings().docTokenWarning);
+  return Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : PME.documents.defaultTokenWarning;
 }
 
 /**
@@ -290,6 +303,15 @@ export async function initSettingsUI() {
       .off("change", "#pme-enabled")
       .on("change", "#pme-enabled", function () {
         extension_settings[SETTINGS_KEY].enabled = $(this).prop("checked");
+        saveSettingsDebounced();
+      });
+
+    $(document)
+      .off("input", "#pme-doc-token-warning")
+      .on("input", "#pme-doc-token-warning", function () {
+        const value = Number($(this).val());
+        if (!Number.isFinite(value) || value < 0) return;
+        extension_settings[SETTINGS_KEY].docTokenWarning = Math.floor(value);
         saveSettingsDebounced();
       });
 
