@@ -5,14 +5,9 @@
  */
 
 export const UI_EVENTS = Object.freeze({
-  UI_OPEN: "ui:open",
-  UI_CLOSE: "ui:close",
-
   PERSONA_CHANGED: "persona:changed",
   PERSONA_DESC_CHANGED: "persona:desc_changed",
   PERSONA_LIST_INVALIDATED: "persona:list_invalidated",
-
-  LINKS_TOGGLED: "links:toggled",
 });
 
 /**
@@ -63,18 +58,5 @@ export function createUiBus() {
     }
   }
 
-  /**
-   * @template Payload
-   * @param {string} event
-   * @param {Handler<Payload>} handler
-   */
-  function once(event, handler) {
-    const unsub = on(event, (payload) => {
-      unsub();
-      handler(payload);
-    });
-    return unsub;
-  }
-
-  return { on, off, once, emit };
+  return { on, off, emit };
 }

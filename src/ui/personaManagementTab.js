@@ -17,17 +17,14 @@ function getDefaultBlock() {
   return document.getElementById("persona-management-block");
 }
 
-let cachedNativeTitle =
-  /** @type {{ text: string, i18n: string|null } | null} */ (null);
-let cachedNativeDrawerIcon =
-  /** @type {{ title: string|null, i18n: string|null } | null} */ (null);
+const PME_TITLE = "Persona Management Extended";
+const PME_TITLE_CLASS = "pme-native-title";
+
+let cachedNativeIconTitle = /** @type {string|null|undefined} */ (undefined);
 
 function getPersonaManagementTitleSpan(container) {
-  const h3 = container.querySelector("h3");
-  if (!(h3 instanceof HTMLElement)) return null;
-  const span = h3.querySelector("span");
-  if (!(span instanceof HTMLSpanElement)) return null;
-  return span;
+  const span = container.querySelector("h3 > span:not(.pme-native-title)");
+  return span instanceof HTMLSpanElement ? span : null;
 }
 
 function getPersonaManagementDrawerIcon() {
@@ -38,75 +35,42 @@ function getPersonaManagementDrawerIcon() {
   return icon;
 }
 
-function refreshNativeTitleCache(container) {
-  const titleSpan = getPersonaManagementTitleSpan(container);
-  if (
-    titleSpan &&
-    (titleSpan.textContent ?? "").trim() !== "Persona Management Extended"
-  ) {
-    cachedNativeTitle = {
-      text: titleSpan.textContent ?? "",
-      i18n: titleSpan.getAttribute("data-i18n"),
-    };
-  }
-  if (!cachedNativeTitle) {
-    cachedNativeTitle = { text: "Persona Management", i18n: null };
-  }
-
-  const icon = getPersonaManagementDrawerIcon();
-  const iconTitle = icon?.getAttribute("title") ?? null;
-  if (icon && iconTitle !== "Persona Management Extended") {
-    cachedNativeDrawerIcon = {
-      title: iconTitle,
-      i18n: icon.getAttribute("data-i18n"),
-    };
-  }
-  if (!cachedNativeDrawerIcon) {
-    cachedNativeDrawerIcon = { title: null, i18n: null };
-  }
-}
-
+/**
+ * Swap the panel title / drawer tooltip while Advanced mode is on.
+ *
+ * NOTE: never remove or rewrite `data-i18n` here. SillyTavern's i18n MutationObserver
+ * reacts to `data-i18n` attribute changes and throws when the attribute disappears.
+ * Instead we hide the native title span and show our own next to it.
+ */
 function applyPersonaManagementTitle(container, advancedEnabled) {
-  // Capture current native title so we can restore it later (including any i18n-applied text).
-  refreshNativeTitleCache(container);
-
   const titleSpan = getPersonaManagementTitleSpan(container);
+  let pmeSpan = container.querySelector(`h3 > span.${PME_TITLE_CLASS}`);
   const icon = getPersonaManagementDrawerIcon();
 
   if (advancedEnabled) {
     if (titleSpan) {
-      titleSpan.textContent = "Persona Management Extended";
-      // Prevent SillyTavern i18n from rewriting the native title back.
-      titleSpan.removeAttribute("data-i18n");
+      if (!pmeSpan) {
+        pmeSpan = document.createElement("span");
+        pmeSpan.className = PME_TITLE_CLASS;
+        pmeSpan.textContent = PME_TITLE;
+        titleSpan.after(pmeSpan);
+      }
+      titleSpan.classList.add("displayNone");
     }
     if (icon) {
-      icon.setAttribute("title", "Persona Management Extended");
-      icon.removeAttribute("data-i18n");
+      if (cachedNativeIconTitle === undefined)
+        cachedNativeIconTitle = icon.getAttribute("title");
+      icon.setAttribute("title", PME_TITLE);
     }
     return;
   }
 
-  if (titleSpan && cachedNativeTitle) {
-    titleSpan.textContent = cachedNativeTitle.text;
-    if (cachedNativeTitle.i18n) {
-      titleSpan.setAttribute("data-i18n", cachedNativeTitle.i18n);
-    } else {
-      titleSpan.removeAttribute("data-i18n");
-    }
-  }
-
-  if (icon && cachedNativeDrawerIcon) {
-    if (cachedNativeDrawerIcon.title) {
-      icon.setAttribute("title", cachedNativeDrawerIcon.title);
-    } else {
-      icon.removeAttribute("title");
-    }
-
-    if (cachedNativeDrawerIcon.i18n) {
-      icon.setAttribute("data-i18n", cachedNativeDrawerIcon.i18n);
-    } else {
-      icon.removeAttribute("data-i18n");
-    }
+  pmeSpan?.remove();
+  titleSpan?.classList.remove("displayNone");
+  if (icon && cachedNativeIconTitle !== undefined) {
+    if (cachedNativeIconTitle === null) icon.removeAttribute("title");
+    else icon.setAttribute("title", cachedNativeIconTitle);
+    cachedNativeIconTitle = undefined;
   }
 }
 

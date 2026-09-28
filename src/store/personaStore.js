@@ -1,8 +1,5 @@
 import { saveSettingsDebounced } from "/script.js";
-import {
-  getOrCreatePersonaDescriptor,
-  user_avatar,
-} from "/scripts/personas.js";
+import { getOrCreatePersonaDescriptor } from "/scripts/personas.js";
 
 /**
  * @typedef {object} PmeItem
@@ -239,10 +236,12 @@ export function addGroup(title = "") {
  */
 export function patchGroup(id, patch) {
   const data = getPmeData();
-  const idx = data.blocks.findIndex((b) => b.type === "group" && b.id === id);
-  if (idx === -1) return;
-  data.blocks[idx] = { ...data.blocks[idx], ...patch, type: "group" };
-  data.blocks[idx].items ??= [];
+  const group = data.blocks.find((b) => b.type === "group" && b.id === id);
+  if (!group) return;
+  // Mutate in place: rendered UI closures keep a reference to this object,
+  // replacing it would make later patches start from stale data.
+  Object.assign(group, patch, { type: "group" });
+  group.items ??= [];
   savePmeData();
 }
 
@@ -268,14 +267,13 @@ export function patchItem(id, patch) {
       return;
     }
     if (b.type === "group") {
-      const idx = b.items.findIndex((x) => x.id === id);
-      if (idx === -1) continue;
-      b.items[idx] = { ...b.items[idx], ...patch };
+      const it = (b.items ?? []).find((x) => x.id === id);
+      if (!it) continue;
+      Object.assign(it, patch);
       savePmeData();
       return;
     }
   }
-  savePmeData();
 }
 
 /**
@@ -349,11 +347,4 @@ export function moveItemInGroup(groupId, itemId, delta) {
   group.items[idx] = group.items[next];
   group.items[next] = tmp;
   savePmeData();
-}
-
-/**
- * Convenience for UI
- */
-export function getCurrentPersonaMeta() {
-  return { avatarId: user_avatar };
 }

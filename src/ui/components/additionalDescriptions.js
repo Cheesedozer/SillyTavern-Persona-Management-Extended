@@ -555,7 +555,7 @@ function renderItem(
     onAnyChange?.();
   });
 
-  // Advanced (planned)
+  // Advanced activation rules
   body.appendChild(
     renderAdvancedControls(item, {
       kind: "item",
@@ -696,7 +696,7 @@ function renderGroup(
     onAnyChange?.();
   });
 
-  // Advanced (planned) for group
+  // Advanced activation rules for group
   body.appendChild(
     renderAdvancedControls(group, {
       kind: "group",

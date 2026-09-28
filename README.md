@@ -87,7 +87,7 @@ So your saved persona description is not permanently “polluted” by injected 
 
 Install via SillyTavern’s extension installer using the repository URL:
 
-`https://github.com/dmitryplyaskin/SillyTavern-Persona-Management-Extended`
+`https://github.com/cheesedozer/SillyTavern-Persona-Management-Extended`
 
 ---
 
@@ -196,13 +196,14 @@ In **Extensions → Persona Management Extended**:
 
 See `LICENSE`.
 
-## Author
+## Authors
 
-Dmitry Plyaskin
+- Dmitry Plyaskin — original author ([upstream repository](https://github.com/dmitryplyaskin/SillyTavern-Persona-Management-Extended))
+- cheesedozer — fork maintainer (SillyBunny support, persona documents)
 
-**Telegram Channel**: [@SillyInnkeeper](https://t.me/SillyInnkeeper) — news, updates, and project discussions.
+**Original author's Telegram channel**: [@SillyInnkeeper](https://t.me/SillyInnkeeper) — news, updates, and project discussions.
 
 ## Support / Issues
 
 Please use the GitHub repository page:
-`https://github.com/dmitryplyaskin/SillyTavern-Persona-Management-Extended`
+`https://github.com/cheesedozer/SillyTavern-Persona-Management-Extended`

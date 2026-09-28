@@ -489,9 +489,6 @@ export function createCurrentPersonaPanel({ getPersonaName, bus }) {
       refreshTokens();
       syncLorebookState();
     },
-    syncNative() {
-      syncNativePersonaControls();
-    },
   };
 
   return panelApi;

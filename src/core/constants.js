@@ -1,6 +1,5 @@
 export const PME = {
   id: "pme",
-  displayName: "Persona Management Extended",
   storage: {
     advancedModeKey: "pme_advanced_mode",
     personaSortKey: "pme_persona_sort",

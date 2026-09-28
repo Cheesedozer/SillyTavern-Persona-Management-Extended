@@ -17,22 +17,6 @@ export function el(tag, className, text) {
 }
 
 /**
- * @param {ParentNode} root
- * @param {string} selector
- */
-export function qs(root, selector) {
-  return root.querySelector(selector);
-}
-
-/**
- * @param {ParentNode} root
- * @param {string} selector
- */
-export function qsa(root, selector) {
-  return Array.from(root.querySelectorAll(selector));
-}
-
-/**
  * @param {Element} node
  * @param {boolean} hidden
  */

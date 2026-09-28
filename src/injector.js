@@ -35,7 +35,7 @@ const DEFAULT_WRAPPER_TEMPLATE = `<tag>${WRAPPER_PLACEHOLDER}</tag>`;
  * @property {number} persona_description_role
  */
 
-/** @type {{active: boolean, snapshot: PersonaSnapshot|null, restoreTimer?: number}|null} */
+/** @type {{active: boolean, snapshot: PersonaSnapshot|null, avatarId?: string, restoreTimer?: number}|null} */
 let patchState = null;
 
 function ensurePatchState() {
@@ -347,6 +347,7 @@ function applyPatch(reason) {
   }
 
   st.snapshot = snap;
+  st.avatarId = String(user_avatar ?? "");
   st.active = true;
 
   power_user.persona_description = finalText;
@@ -375,10 +376,15 @@ function restorePatch(reason) {
   if (!st.active) return;
 
   try {
-    restorePowerUser(st.snapshot);
+    // If the persona was switched while patched, ST has already loaded the new
+    // persona's values into power_user. Restoring would clobber them with the old ones.
+    if (String(user_avatar ?? "") === st.avatarId) {
+      restorePowerUser(st.snapshot);
+    }
   } finally {
     st.active = false;
     st.snapshot = null;
+    st.avatarId = undefined;
     if (st.restoreTimer) {
       window.clearTimeout(st.restoreTimer);
       st.restoreTimer = undefined;
@@ -416,6 +422,11 @@ export function registerGenerateInterceptor() {
     eventSource.on(event_types.GENERATION_STOPPED, () =>
       restorePatch("GENERATION_STOPPED")
     );
+    if (event_types.PERSONA_CHANGED) {
+      eventSource.on(event_types.PERSONA_CHANGED, () =>
+        restorePatch("PERSONA_CHANGED")
+      );
+    }
   }
 
   if (typeof globalThis[PME.interceptor.globalKey] === "function") {
